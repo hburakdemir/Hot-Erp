@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply font-sans bg-cream-100 text-zinc-900 min-h-screen;
+  }
+
+  .dark body {
+    @apply bg-navy-950 text-white;
+  }
+
+  ::selection {
+    @apply bg-red-200 text-zinc-900;
+  }
+
+  .dark ::selection {
+    @apply bg-red-700 text-white;
+  }
+}
+
+@layer components {
+  .input-base {
+    @apply w-full bg-white dark:bg-navy-950 border border-zinc-200 dark:border-navy-700 rounded-xl px-4 py-3 text-zinc-900 dark:text-white text-sm
+           placeholder:text-zinc-400
+           focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent
+           transition-all duration-200
+           shadow-inner-sm;
+  }
+
+  .input-error {
+    @apply border-red-400 focus:ring-red-400;
+  }
+
+  .label-base {
+    @apply block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1.5 tracking-wide uppercase;
+  }
+}
+
+@layer utilities {
+  .animation-delay-100 { animation-delay: 100ms; }
+  .animation-delay-200 { animation-delay: 200ms; }
+  .animation-delay-300 { animation-delay: 300ms; }
+  .animation-delay-400 { animation-delay: 400ms; }
+  .animation-delay-500 { animation-delay: 500ms; }
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { @apply bg-cream-200 dark:bg-navy-900; }
+::-webkit-scrollbar-thumb { @apply bg-red-300 dark:bg-red-900 rounded-full; }
+::-webkit-scrollbar-thumb:hover { @apply bg-red-400 dark:bg-red-700; }
