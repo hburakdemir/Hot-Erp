@@ -1,0 +1,211 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String             @id @default(uuid())
+  email              String             @unique
+  username           String             @unique
+  password           String
+  firstName          String
+  lastName           String
+  phone              String?
+  university         String?
+  faculty            String?
+  department         String?
+  year               String?
+  avatarUrl          String?
+  employmentStatus   EmploymentStatus   @default(ACTIVE)
+  isActive           Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  uiPreferences      Json?
+
+  roles         UserRole[]
+  refreshTokens RefreshToken[]
+  member        Member?
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+/// Granular RBAC: key is stable API identifier (e.g. member.view, role.update).
+model Permission {
+  id          String           @id @default(uuid())
+  key         String           @unique
+  description String?
+  category    String
+  createdAt   DateTime         @default(now())
+
+  roles RolePermission[]
+
+  @@index([category])
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  familyId  String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  isRevoked Boolean  @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, familyId])
+  @@map("refresh_tokens")
+}
+
+model Club {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  category    String?
+  logoUrl     String?
+  isActive    Boolean   @default(true)
+  foundedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  members Member[]
+  events  Event[]
+
+  @@map("clubs")
+}
+
+model Member {
+  id         String       @id @default(uuid())
+  userId     String       @unique
+  clubId     String
+  status     MemberStatus @default(pending)
+  role       String       @default("uye")
+  joinedAt   DateTime     @default(now())
+  approvedAt DateTime?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@map("members")
+}
+
+model Event {
+  id          String    @id @default(uuid())
+  title       String
+  description String?
+  location    String?
+  startDate   DateTime
+  endDate     DateTime?
+  capacity    Int?
+  isPublic    Boolean   @default(true)
+  clubId      String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  club      Club            @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  attendees EventAttendee[]
+
+  @@map("events")
+}
+
+model EventAttendee {
+  id      String   @id @default(uuid())
+  eventId String
+  userId  String
+  joinedAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@map("event_attendees")
+}
+
+model Announcement {
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  clubId    String?
+  isGlobal  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("announcements")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  ON_LEAVE
+  PROBATION
+  TERMINATED
+}
+
+enum MemberStatus {
+  pending
+  approved
+  rejected
+  suspended
+}
