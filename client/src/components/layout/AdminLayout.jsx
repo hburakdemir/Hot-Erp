@@ -9,6 +9,9 @@ import {
   Moon,
   Sun,
   MonitorSmartphone,
+  Megaphone,
+  CalendarDays,
+  UsersRound,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../hooks/useAuth.js'
@@ -18,6 +21,9 @@ const SIDEBAR_W = 'w-64'
 
 const nav = [
   { to: '/dashboard', label: 'Özet', icon: LayoutDashboard },
+  { to: '/announcements', label: 'Duyurular', icon: Megaphone, perm: 'announcement.view' },
+  { to: '/events', label: 'Etkinlikler', icon: CalendarDays, perm: 'event.view' },
+  { to: '/meetings', label: 'Toplantılar', icon: UsersRound, perm: 'meeting.view' },
   { to: '/users', label: 'Üyeler', icon: Users, perm: 'member.view' },
   { to: '/roles', label: 'Roller ve izinler', icon: Shield, perm: 'role.view' },
   { to: '/audit', label: 'Denetim günlüğü', icon: ScrollText, perm: 'audit.view' },

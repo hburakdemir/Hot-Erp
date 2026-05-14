@@ -1,7 +1,18 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Users, Shield, ScrollText, TrendingUp } from 'lucide-react'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+  Legend,
+} from 'recharts'
+import { Users, Shield, ScrollText, TrendingUp, PieChart as PieChartIcon } from 'lucide-react'
 import { usersApi } from '../api/users.js'
+import { dashboardApi } from '../api/dashboard.js'
 import { useAuth } from '../hooks/useAuth.js'
 import Card from '../components/Card.jsx'
 import Can from '../components/permission/Can.jsx'
@@ -16,7 +27,37 @@ export default function Dashboard() {
     enabled: hasPermission('member.view'),
   })
 
+  const { data: dash } = useQuery({
+    queryKey: ['dashboard', 'summary'],
+    queryFn: dashboardApi.summary,
+    enabled: hasPermission('member.view') || hasPermission('event.view'),
+  })
+
   const totalMembers = userStats?.pagination?.total ?? '—'
+
+  const facultyChart =
+    hasPermission('member.view') && dash?.membersByFaculty?.length
+      ? dash.membersByFaculty.map((r) => ({
+          label: r.label.length > 18 ? `${r.label.slice(0, 18)}…` : r.label,
+          count: r.count,
+        }))
+      : []
+
+  const roleChart =
+    hasPermission('member.view') && dash?.membersByRole?.length
+      ? dash.membersByRole.map((r) => ({
+          label: r.roleName.length > 16 ? `${r.roleName.slice(0, 16)}…` : r.roleName,
+          count: r.count,
+        }))
+      : []
+
+  const eventCatChart =
+    hasPermission('event.view') && dash?.eventsByCategory?.length
+      ? dash.eventsByCategory.map((r) => ({
+          label: (r.label || '—').length > 14 ? `${(r.label || '').slice(0, 14)}…` : r.label || '—',
+          count: r.count,
+        }))
+      : []
 
   return (
     <PageFrame
@@ -89,11 +130,74 @@ export default function Dashboard() {
           </Card>
         </div>
 
+        {(facultyChart.length > 0 || roleChart.length > 0 || eventCatChart.length > 0) && (
+          <div className="grid lg:grid-cols-2 gap-4">
+            {facultyChart.length > 0 && (
+              <Card className="p-5 dark:bg-navy-900 dark:border-red-950/50">
+                <h2 className="font-display text-sm font-semibold text-navy-900 dark:text-white mb-3 flex items-center gap-2">
+                  <PieChartIcon size={16} className="text-red-600" />
+                  Fakülte dağılımı
+                </h2>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={facultyChart} margin={{ top: 8, right: 8, left: 0, bottom: 40 }}>
+                      <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                      <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} angle={-25} textAnchor="end" height={60} />
+                      <YAxis allowDecimals={false} width={32} />
+                      <Tooltip />
+                      <Bar dataKey="count" name="Üye" fill="#991b1b" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            )}
+
+            {roleChart.length > 0 && (
+              <Card className="p-5 dark:bg-navy-900 dark:border-red-950/50">
+                <h2 className="font-display text-sm font-semibold text-navy-900 dark:text-white mb-3">
+                  Rol başına üye
+                </h2>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={roleChart} layout="vertical" margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                      <XAxis type="number" allowDecimals={false} />
+                      <YAxis type="category" dataKey="label" width={100} tick={{ fontSize: 10 }} />
+                      <Tooltip />
+                      <Bar dataKey="count" name="Üye" fill="#0f172a" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            )}
+
+            {eventCatChart.length > 0 && (
+              <Card className="p-5 dark:bg-navy-900 dark:border-red-950/50 lg:col-span-2">
+                <h2 className="font-display text-sm font-semibold text-navy-900 dark:text-white mb-3">
+                  Etkinlikler — kategori sayıları
+                </h2>
+                <div className="h-56 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={eventCatChart}>
+                      <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                      <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="count" name="Etkinlik" fill="#b45309" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            )}
+          </div>
+        )}
+
         <Card className="p-6 dark:bg-navy-900 dark:border-red-950/50">
           <h2 className="font-display text-lg text-navy-900 dark:text-white mb-2">Güvenlik ve oturum</h2>
           <p className="text-sm text-zinc-600 dark:text-red-100/80 leading-relaxed">
-            Oturum bilgileriniz güvenli çerezlerle saklanır; erişim jetonu kısa ömürlüdür. Yetkiler sunucuda her
-            istekte güncellenir. Çıkış veya «tüm oturumlardan çık» ile diğer cihazlardaki oturumlar sonlandırılabilir.
+            Oturum bilgileriniz yalnızca HTTPOnly çerezlerde tutulur; tarayıcıda erişim/refresh jetonu saklanmaz. Yetkiler
+            sunucuda her istekte güncellenir. Pasif hesaplarda panel API’leri kapatılır; çıkış ile oturum sonlanır.
           </p>
         </Card>
       </div>

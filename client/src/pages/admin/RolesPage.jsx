@@ -68,8 +68,17 @@ export default function RolesPage() {
                     {r.name}
                   </div>
                   <div className="text-xs text-zinc-500 line-clamp-2">{r.description}</div>
-                  <div className="text-[11px] text-zinc-400 mt-2">
+                  <div className="text-[11px] text-zinc-400 mt-2 font-mono line-clamp-2" title={(r.permissions ?? []).map((p) => p.key).join(', ')}>
                     {(r.permissions ?? []).length} izin
+                    {(r.permissions ?? []).length > 0 && (
+                      <span className="block text-zinc-500 normal-case mt-0.5">
+                        {(r.permissions ?? [])
+                          .slice(0, 6)
+                          .map((p) => p.key)
+                          .join(' · ')}
+                        {(r.permissions ?? []).length > 6 ? '…' : ''}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

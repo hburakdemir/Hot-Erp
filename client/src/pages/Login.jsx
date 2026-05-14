@@ -36,11 +36,15 @@ export default function Login() {
 
     setLoading(true)
     try {
-      await login(data)
+      const profile = await login(data)
       toast.success('Hoş geldiniz, giriş başarılı.')
-      navigate('/dashboard')
+      navigate(profile?.portalDeactivated ? '/deactive' : '/dashboard')
     } catch (err) {
-      toast.error(err.message || 'Giriş yapılamadı')
+      if (err.code === 'REGISTRATION_PENDING') {
+        toast.error(err.message || 'Hesabınız henüz onaylanmadı.')
+      } else {
+        toast.error(err.message || 'Giriş yapılamadı')
+      }
     } finally {
       setLoading(false)
     }

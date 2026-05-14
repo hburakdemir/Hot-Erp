@@ -49,7 +49,9 @@ api.interceptors.response.use(
       err.response?.data?.error ||
       err.message ||
       'Bir hata oluştu'
-    return Promise.reject(new Error(message))
+    const e = new Error(message)
+    if (err.response?.data?.code) e.code = err.response.data.code
+    return Promise.reject(e)
   }
 )
 

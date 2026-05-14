@@ -93,7 +93,7 @@ export default function Register() {
       // KVKK ve confirmPassword backend'e gonderilmez
       const { kvkk, confirmPassword, ...payload } = data
       await register(payload)
-      toast.success('Kayit basarili! Giris yapabilirsiniz.')
+      toast.success('Kayıt alındı. Yönetici onayından sonra giriş yapabileceksiniz.')
       navigate('/login')
     } catch (err) {
       toast.error(err.message || 'Kayit olusturulamadi')

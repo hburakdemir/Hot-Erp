@@ -33,6 +33,10 @@ const ALL_COLUMN_IDS = [
   'roles',
   'employmentStatus',
   'isActive',
+  'registrationStatus',
+  'approvedAt',
+  'approvedBy',
+  'portalDeactivated',
   'createdAt',
   'updatedAt',
 ]
@@ -51,6 +55,10 @@ const COLUMN_LABELS = {
   roles: 'Roller',
   employmentStatus: 'İstihdam',
   isActive: 'Hesap',
+  registrationStatus: 'Onay',
+  approvedAt: 'Onay tarihi',
+  approvedBy: 'Onaylayan',
+  portalDeactivated: 'Portal pasif',
   createdAt: 'Kayıt tarihi',
   updatedAt: 'Güncelleme',
 }
@@ -86,6 +94,10 @@ const DEFAULT_WIDTH = {
   roles: 200,
   employmentStatus: 120,
   isActive: 100,
+  registrationStatus: 100,
+  approvedAt: 120,
+  approvedBy: 140,
+  portalDeactivated: 100,
   createdAt: 112,
   updatedAt: 112,
 }
@@ -128,7 +140,7 @@ function ResizableTh({ colId, label, width, onResizeStart }) {
 }
 
 export default function UsersPage() {
-  const { refetchProfile } = useAuth()
+  const { refetchProfile, hasPermission } = useAuth()
   const qc = useQueryClient()
   const [view, setView] = useState(() =>
     typeof window !== 'undefined' && window.innerWidth < 768 ? 'cards' : 'table'
@@ -137,9 +149,9 @@ export default function UsersPage() {
   const [roleId, setRoleId] = useState('')
   const [employmentStatus, setEmploymentStatus] = useState('')
   const [isActive, setIsActive] = useState('')
-  const [sortBy, setSortBy] = useState('createdAt')
-  const [sortOrder, setSortOrder] = useState('desc')
-  const [page, setPage] = useState(1)
+  const [registrationStatus, setRegistrationStatus] = useState('')
+  const [portalFilter, setPortalFilter] = useState('')
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
 
   const [columns, setColumns] = useState(() => [...DEFAULT_COLUMNS])
   const [colWidths, setColWidths] = useState({})
@@ -160,6 +172,26 @@ export default function UsersPage() {
     }
     prefsHydrated.current = true
   }, [prefsReady, prefs])
+
+  const bulkApprove = useMutation({
+    mutationFn: (userIds) => usersApi.bulkApproveRegistration(userIds),
+    onSuccess: (res) => {
+      toast.success(`${res.updated} üye onaylandı`)
+      setSelectedIds(new Set())
+      qc.invalidateQueries({ queryKey: ['users'] })
+    },
+    onError: (e) => toast.error(e.message),
+  })
+
+  const bulkPortal = useMutation({
+    mutationFn: ({ userIds, portalDeactivated }) => usersApi.bulkSetPortalDeactivated(userIds, portalDeactivated),
+    onSuccess: (res) => {
+      toast.success(`${res.updated} hesap güncellendi`)
+      setSelectedIds(new Set())
+      qc.invalidateQueries({ queryKey: ['users'] })
+    },
+    onError: (e) => toast.error(e.message),
+  })
 
   const patchPrefs = useMutation({
     mutationFn: (body) => usersApi.patchMyUiPreferences(body),
@@ -218,17 +250,23 @@ export default function UsersPage() {
       roleId: roleId || undefined,
       employmentStatus: employmentStatus || undefined,
       isActive: isActive || undefined,
+      registrationStatus: registrationStatus || undefined,
+      portalDeactivated: portalFilter || undefined,
       sortBy,
       sortOrder,
     }),
-    [page, search, roleId, employmentStatus, isActive, sortBy, sortOrder]
+    [page, search, roleId, employmentStatus, isActive, registrationStatus, portalFilter, sortBy, sortOrder]
   )
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ['users', queryParams],
     queryFn: () => usersApi.list(queryParams),
     placeholderData: (prev) => prev,
   })
+
+  useEffect(() => {
+    if (isError) toast.error(error?.message || 'Üye listesi yüklenemedi')
+  }, [isError, error])
 
   const { data: roles } = useQuery({
     queryKey: ['roles'],
@@ -237,6 +275,29 @@ export default function UsersPage() {
 
   const users = data?.users ?? []
   const pagination = data?.pagination
+  const canBulk = hasPermission('member.update')
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const n = new Set(prev)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+  }
+
+  const allOnPageSelected = users.length > 0 && users.every((u) => selectedIds.has(u.id))
+
+  const toggleSelectAllPage = () => {
+    const idsOnPage = users.map((u) => u.id)
+    setSelectedIds((prev) => {
+      const allSel = idsOnPage.length > 0 && idsOnPage.every((id) => prev.has(id))
+      const n = new Set(prev)
+      if (allSel) idsOnPage.forEach((id) => n.delete(id))
+      else idsOnPage.forEach((id) => n.add(id))
+      return n
+    })
+  }
 
   const renderCell = (colId, u) => {
     switch (colId) {
@@ -291,6 +352,36 @@ export default function UsersPage() {
         return statusBadge(u.employmentStatus, u.isActive)
       case 'isActive':
         return <span className="text-xs">{u.isActive ? 'Açık' : 'Kapalı'}</span>
+      case 'registrationStatus':
+        return (
+          <span
+            className={`text-[11px] px-2 py-0.5 rounded-full ${
+              u.registrationStatus === 'APPROVED'
+                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40'
+                : 'bg-amber-100 text-amber-900 dark:bg-amber-900/40'
+            }`}
+          >
+            {u.registrationStatus === 'APPROVED' ? 'Onaylı' : 'Bekliyor'}
+          </span>
+        )
+      case 'approvedAt':
+        return (
+          <span className="text-xs text-zinc-500 whitespace-nowrap">
+            {u.approvedAt ? new Date(u.approvedAt).toLocaleString('tr-TR') : '—'}
+          </span>
+        )
+      case 'approvedBy':
+        return (
+          <span className="text-xs truncate block">
+            {u.approvedBy ? `${u.approvedBy.firstName} ${u.approvedBy.lastName}` : '—'}
+          </span>
+        )
+      case 'portalDeactivated':
+        return (
+          <span className={`text-xs ${u.portalDeactivated ? 'text-amber-700 dark:text-amber-300' : 'text-zinc-500'}`}>
+            {u.portalDeactivated ? 'Pasif' : 'Aktif'}
+          </span>
+        )
       case 'createdAt':
         return <span className="text-xs text-zinc-500 whitespace-nowrap">{new Date(u.createdAt).toLocaleString('tr-TR')}</span>
       case 'updatedAt':
@@ -306,6 +397,29 @@ export default function UsersPage() {
       description="Tüm kullanıcı alanları API’den gelir; kolonları veritabanında saklanan tercihinize göre seçin. Sütun genişliği yalnızca bu oturumda geçerlidir."
       actions={
         <div className="flex flex-wrap items-center gap-2">
+          <Can permission="member.update">
+            {selectedIds.size > 0 && (
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  loading={bulkApprove.isPending}
+                  onClick={() => bulkApprove.mutate([...selectedIds])}
+                >
+                  Onayla ({selectedIds.size})
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  loading={bulkPortal.isPending}
+                  onClick={() => bulkPortal.mutate({ userIds: [...selectedIds], portalDeactivated: true })}
+                >
+                  Pasifleştir
+                </Button>
+              </>
+            )}
+          </Can>
           <div className="relative">
             <Button
               type="button"
@@ -423,6 +537,30 @@ export default function UsersPage() {
               <option value="false">Kapalı</option>
             </select>
             <select
+              value={registrationStatus}
+              onChange={(e) => {
+                setRegistrationStatus(e.target.value)
+                setPage(1)
+              }}
+              className="rounded-xl border border-zinc-200 dark:border-navy-700 bg-white dark:bg-navy-950 text-sm px-2 py-2"
+            >
+              <option value="">Kayıt onayı</option>
+              <option value="APPROVED">Onaylı</option>
+              <option value="PENDING">Bekliyor</option>
+            </select>
+            <select
+              value={portalFilter}
+              onChange={(e) => {
+                setPortalFilter(e.target.value)
+                setPage(1)
+              }}
+              className="rounded-xl border border-zinc-200 dark:border-navy-700 bg-white dark:bg-navy-950 text-sm px-2 py-2"
+            >
+              <option value="">Portal</option>
+              <option value="true">Pasif</option>
+              <option value="false">Aktif</option>
+            </select>
+            <select
               value={`${sortBy}:${sortOrder}`}
               onChange={(e) => {
                 const [sb, so] = e.target.value.split(':')
@@ -465,7 +603,14 @@ export default function UsersPage() {
         </div>
 
         <div className="flex-1 min-h-0 flex flex-col">
-          {isLoading && !data ? (
+          {isError ? (
+            <div className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50/80 dark:bg-red-950/30 p-4 text-sm text-red-900 dark:text-red-100 space-y-2">
+              <p>Üye listesi alınamadı: {error?.message ?? 'Bilinmeyen hata'}</p>
+              <Button type="button" size="sm" variant="secondary" onClick={() => refetch()}>
+                Tekrar dene
+              </Button>
+            </div>
+          ) : isLoading && !data ? (
             <div className="space-y-3 p-2">
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-48 w-full" />
@@ -475,11 +620,22 @@ export default function UsersPage() {
               <table className="text-sm w-max min-w-full table-fixed border-collapse">
                 <thead>
                   <tr>
+                    {canBulk && (
+                      <th className="w-10 px-2 py-3 text-left align-middle bg-navy-50 dark:bg-navy-800/80 border-b border-zinc-200 dark:border-navy-700">
+                        <input
+                          type="checkbox"
+                          className="rounded border-zinc-400"
+                          checked={allOnPageSelected}
+                          onChange={toggleSelectAllPage}
+                          aria-label="Sayfadakilerin tümünü seç"
+                        />
+                      </th>
+                    )}
                     {columns.map((colId) => (
                       <ResizableTh
                         key={colId}
                         colId={colId}
-                        label={COLUMN_LABELS[colId]}
+                        label={COLUMN_LABELS[colId] ?? colId}
                         width={colWidths[colId] ?? DEFAULT_WIDTH[colId] ?? 120}
                         onResizeStart={onResizeStart}
                       />
@@ -489,6 +645,17 @@ export default function UsersPage() {
                 <tbody className="divide-y divide-zinc-100 dark:divide-navy-800">
                   {users.map((u) => (
                     <tr key={u.id} className="hover:bg-red-50/40 dark:hover:bg-navy-800/50">
+                      {canBulk && (
+                        <td className="px-2 py-2 align-middle w-10">
+                          <input
+                            type="checkbox"
+                            className="rounded border-zinc-400"
+                            checked={selectedIds.has(u.id)}
+                            onChange={() => toggleSelect(u.id)}
+                            aria-label="Satır seç"
+                          />
+                        </td>
+                      )}
                       {columns.map((colId) => (
                         <td
                           key={colId}

@@ -11,4 +11,8 @@ export const usersApi = {
   assignRoles: (id, roleIds) =>
     api.patch(`/users/${id}/roles`, { roleIds }).then((r) => r.data.data),
   remove: (id) => api.delete(`/users/${id}`).then((r) => r.data),
+  bulkApproveRegistration: (userIds) =>
+    api.post('/users/bulk/approve-registration', { userIds }).then((r) => r.data.data),
+  bulkSetPortalDeactivated: (userIds, portalDeactivated) =>
+    api.post('/users/bulk/portal-deactivated', { userIds, portalDeactivated }).then((r) => r.data.data),
 }
