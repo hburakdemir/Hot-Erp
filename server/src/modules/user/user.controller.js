@@ -74,6 +74,29 @@ const patchMyUiPreferences = async (req, res, next) => {
   }
 }
 
+const bulkApproveRegistration = async (req, res, next) => {
+  try {
+    const data = await userService.bulkApproveRegistration(req.body.userIds, req, req.user.userId)
+    return success(res, data, 'Üyeler onaylandı')
+  } catch (err) {
+    next(err)
+  }
+}
+
+const bulkSetPortalDeactivated = async (req, res, next) => {
+  try {
+    const data = await userService.bulkSetPortalDeactivated(
+      req.body.userIds,
+      req.body.portalDeactivated,
+      req,
+      req.user.userId
+    )
+    return success(res, data, 'Hesap durumu güncellendi')
+  } catch (err) {
+    next(err)
+  }
+}
+
 module.exports = {
   getAllUsers,
   getUserById,
@@ -83,4 +106,6 @@ module.exports = {
   deleteUser,
   getMyUiPreferences,
   patchMyUiPreferences,
+  bulkApproveRegistration,
+  bulkSetPortalDeactivated,
 }

@@ -8,6 +8,8 @@ const { createRoleSchema, updateRoleSchema, assignPermissionsSchema } = require(
 const router = Router()
 
 router.use(authMiddleware)
+const requireFullPortalAccess = require('../../middleware/portalAccess.middleware')
+router.use(requireFullPortalAccess)
 
 router.get('/', requirePermission('role.view'), controller.getAllRoles)
 router.get('/:id', requirePermission('role.view'), controller.getRoleById)

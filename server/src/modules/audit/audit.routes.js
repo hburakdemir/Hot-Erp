@@ -8,6 +8,9 @@ const { listAuditQuerySchema } = require('./audit.schema')
 const router = Router()
 
 router.use(authMiddleware)
+const requireFullPortalAccess = require('../../middleware/portalAccess.middleware')
+router.use(requireFullPortalAccess)
+
 router.get('/', requirePermission('audit.view'), validateQuery(listAuditQuerySchema), controller.listAuditLogs)
 
 module.exports = router

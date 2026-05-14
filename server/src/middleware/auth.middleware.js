@@ -44,6 +44,9 @@ const authMiddleware = async (req, res, next) => {
       select: {
         id: true,
         isActive: true,
+        portalDeactivated: true,
+        registrationStatus: true,
+        deletedAt: true,
         email: true,
         username: true,
         firstName: true,
@@ -74,6 +77,14 @@ const authMiddleware = async (req, res, next) => {
       return error(res, 'Account is disabled', 403)
     }
 
+    if (user.deletedAt) {
+      return error(res, 'Account removed', 401)
+    }
+
+    if (user.registrationStatus === 'PENDING') {
+      return error(res, 'Hesap onayı bekleniyor', 403)
+    }
+
     const permissions = collectPermissionKeys(user)
     const roles = user.roles.map((ur) => ({
       id: ur.role.id,
@@ -88,6 +99,8 @@ const authMiddleware = async (req, res, next) => {
       lastName: user.lastName,
       roles,
       permissions,
+      portalDeactivated: user.portalDeactivated,
+      registrationStatus: user.registrationStatus,
     }
 
     next()

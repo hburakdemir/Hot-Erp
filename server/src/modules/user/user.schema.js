@@ -1,6 +1,16 @@
 const { z } = require('zod')
 
 const employmentStatuses = ['ACTIVE', 'ON_LEAVE', 'PROBATION', 'TERMINATED']
+const registrationStatuses = ['PENDING', 'APPROVED']
+
+const bulkUserIdsSchema = z.object({
+  userIds: z.array(z.string().uuid()).min(1).max(200),
+})
+
+const bulkPortalSchema = z.object({
+  userIds: z.array(z.string().uuid()).min(1).max(200),
+  portalDeactivated: z.boolean(),
+})
 
 const assignRolesSchema = z.object({
   roleIds: z.array(z.string().uuid()),
@@ -22,6 +32,8 @@ const listUsersQuerySchema = z.object({
   roleId: z.string().uuid().optional(),
   employmentStatus: z.enum(employmentStatuses).optional(),
   isActive: z.enum(['true', 'false']).optional(),
+  registrationStatus: z.enum(registrationStatuses).optional(),
+  portalDeactivated: z.enum(['true', 'false']).optional(),
   sortBy: z
     .enum([
       'createdAt',
@@ -38,6 +50,9 @@ const listUsersQuerySchema = z.object({
       'isActive',
       'year',
       'id',
+      'registrationStatus',
+      'approvedAt',
+      'portalDeactivated',
     ])
     .default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
@@ -72,6 +87,10 @@ const MEMBER_TABLE_COLUMN_KEYS = [
   'roles',
   'employmentStatus',
   'isActive',
+  'registrationStatus',
+  'approvedAt',
+  'approvedBy',
+  'portalDeactivated',
   'createdAt',
   'updatedAt',
 ]
@@ -99,5 +118,7 @@ module.exports = {
   listUsersQuerySchema,
   createUserSchema,
   patchUiPreferencesSchema,
+  bulkUserIdsSchema,
+  bulkPortalSchema,
   MEMBER_TABLE_COLUMN_KEYS,
 }

@@ -22,15 +22,29 @@ model User {
   avatarUrl          String?
   employmentStatus   EmploymentStatus   @default(ACTIVE)
   isActive           Boolean            @default(true)
+  /// Self-kayıt yöneticiden onay bekliyor mu?
+  registrationStatus RegistrationStatus @default(APPROVED)
+  approvedAt         DateTime?
+  approvedById       String?
+  approvedBy         User?              @relation("AccountApproval", fields: [approvedById], references: [id], onDelete: SetNull)
+  accountsApproved   User[]             @relation("AccountApproval")
+  /// Pasif üye: yalnızca /deactive ve sınırlı API
+  portalDeactivated    Boolean          @default(false)
+  deletedAt            DateTime?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   uiPreferences      Json?
 
-  roles         UserRole[]
-  refreshTokens RefreshToken[]
-  member        Member?
-  auditLogs     AuditLog[]
+  roles             UserRole[]
+  refreshTokens     RefreshToken[]
+  member            Member?
+  auditLogs         AuditLog[]
+  eventAttendees    EventAttendee[]
+  meetingAttendees  MeetingAttendee[]
 
+  @@index([registrationStatus])
+  @@index([portalDeactivated])
+  @@index([deletedAt])
   @@map("users")
 }
 
@@ -111,8 +125,9 @@ model Club {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  members Member[]
-  events  Event[]
+  members   Member[]
+  events    Event[]
+  meetings  Meeting[]
 
   @@map("clubs")
 }
@@ -134,46 +149,149 @@ model Member {
   @@map("members")
 }
 
-model Event {
+model EventCategory {
   id          String    @id @default(uuid())
-  title       String
+  name        String
   description String?
-  location    String?
-  startDate   DateTime
-  endDate     DateTime?
-  capacity    Int?
-  isPublic    Boolean   @default(true)
-  clubId      String
+  color       String?
+  sortOrder   Int       @default(0)
+  deletedAt   DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  club      Club            @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  attendees EventAttendee[]
+  events Event[]
 
+  @@index([deletedAt])
+  @@map("event_categories")
+}
+
+/// Katılım durumu şablonları — scope ile etkinlik / toplantı ayrılır
+model ParticipationStatus {
+  id          String                @id @default(uuid())
+  scope       ParticipationScope
+  label       String
+  color       String?
+  fontWeight  String?
+  fontStyle   String?
+  sortOrder   Int                   @default(0)
+  deletedAt   DateTime?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  eventAttendees    EventAttendee[]
+  meetingAttendees  MeetingAttendee[]
+
+  @@index([scope, deletedAt])
+  @@map("participation_statuses")
+}
+
+model Event {
+  id                 String    @id @default(uuid())
+  title              String
+  description        String?
+  location           String?
+  startDate          DateTime?
+  endDate            DateTime?
+  startUndetermined  Boolean   @default(false)
+  endUndetermined    Boolean   @default(false)
+  capacity           Int?
+  isPublic           Boolean   @default(true)
+  clubId             String
+  categoryId         String?
+  deletedAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  club       Club           @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  category   EventCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  attendees  EventAttendee[]
+
+  @@index([clubId, deletedAt])
+  @@index([categoryId])
   @@map("events")
 }
 
 model EventAttendee {
-  id      String   @id @default(uuid())
-  eventId String
-  userId  String
-  joinedAt DateTime @default(now())
+  id                      String   @id @default(uuid())
+  eventId                 String
+  userId                  String
+  participationStatusId String?
+  joinedAt                DateTime @default(now())
+  deletedAt               DateTime?
 
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event                 Event                  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  participationStatus   ParticipationStatus? @relation(fields: [participationStatusId], references: [id], onDelete: SetNull)
 
   @@unique([eventId, userId])
+  @@index([participationStatusId])
   @@map("event_attendees")
 }
 
+model MeetingCategory {
+  id          String    @id @default(uuid())
+  name        String
+  color       String?
+  sortOrder   Int       @default(0)
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  meetings Meeting[]
+
+  @@map("meeting_categories")
+}
+
+model Meeting {
+  id                 String    @id @default(uuid())
+  title              String
+  description        String?
+  location           String?
+  startDate          DateTime?
+  endDate            DateTime?
+  startUndetermined  Boolean   @default(false)
+  endUndetermined    Boolean   @default(false)
+  clubId             String
+  categoryId         String?
+  deletedAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  club         Club              @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  category     MeetingCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  attendees    MeetingAttendee[]
+
+  @@index([clubId, deletedAt])
+  @@map("meetings")
+}
+
+model MeetingAttendee {
+  id                      String   @id @default(uuid())
+  meetingId               String
+  userId                  String
+  participationStatusId String?
+  joinedAt                DateTime @default(now())
+  deletedAt               DateTime?
+
+  meeting               Meeting                @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  participationStatus   ParticipationStatus? @relation(fields: [participationStatusId], references: [id], onDelete: SetNull)
+
+  @@unique([meetingId, userId])
+  @@map("meeting_attendees")
+}
+
 model Announcement {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   title     String
   content   String
   clubId    String?
-  isGlobal  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isGlobal  Boolean   @default(false)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
+  @@index([deletedAt])
   @@map("announcements")
 }
 
@@ -208,4 +326,14 @@ enum MemberStatus {
   approved
   rejected
   suspended
+}
+
+enum RegistrationStatus {
+  PENDING
+  APPROVED
+}
+
+enum ParticipationScope {
+  EVENT
+  MEETING
 }

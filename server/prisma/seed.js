@@ -9,12 +9,23 @@ const PERMISSIONS = [
   { key: 'member.view', category: 'Uyeler', description: 'Üye listesini görüntüleme' },
   { key: 'member.create', category: 'Uyeler', description: 'Yeni üye oluşturma' },
   { key: 'member.update', category: 'Uyeler', description: 'Üye bilgilerini güncelleme' },
-  { key: 'member.delete', category: 'Uyeler', description: 'Üye silme' },
+  { key: 'member.delete', category: 'Uyeler', description: 'Üye silme (soft)' },
   { key: 'role.view', category: 'Roller', description: 'Rolleri görüntüleme' },
   { key: 'role.create', category: 'Roller', description: 'Rol oluşturma' },
   { key: 'role.update', category: 'Roller', description: 'Rol ve izinleri güncelleme' },
   { key: 'role.delete', category: 'Roller', description: 'Rol silme' },
-  { key: 'announcement.create', category: 'Duyuru', description: 'Duyuru oluşturma' },
+  { key: 'announcement.view', category: 'Duyurular', description: 'Duyuruları görüntüleme' },
+  { key: 'announcement.create', category: 'Duyurular', description: 'Duyuru oluşturma' },
+  { key: 'announcement.update', category: 'Duyurular', description: 'Duyuru güncelleme' },
+  { key: 'announcement.delete', category: 'Duyurular', description: 'Duyuru silme (soft)' },
+  { key: 'event.view', category: 'Etkinlikler', description: 'Etkinlikleri görüntüleme' },
+  { key: 'event.create', category: 'Etkinlikler', description: 'Etkinlik oluşturma' },
+  { key: 'event.update', category: 'Etkinlikler', description: 'Etkinlik / kategori / durum yönetimi' },
+  { key: 'event.delete', category: 'Etkinlikler', description: 'Etkinlik silme (soft)' },
+  { key: 'meeting.view', category: 'Toplantilar', description: 'Toplantıları görüntüleme' },
+  { key: 'meeting.create', category: 'Toplantilar', description: 'Toplantı oluşturma' },
+  { key: 'meeting.update', category: 'Toplantilar', description: 'Toplantı güncelleme' },
+  { key: 'meeting.delete', category: 'Toplantilar', description: 'Toplantı silme (soft)' },
   { key: 'task.manage', category: 'Görev', description: 'Görev yönetimi' },
   { key: 'inventory.manage', category: 'Envanter', description: 'Envanter yönetimi' },
   { key: 'audit.view', category: 'Denetim', description: 'Denetim kayıtlarını görüntüleme' },
@@ -50,7 +61,10 @@ const ROLE_DEFINITIONS = [
       permissionKeys: [
         'member.view',
         'member.update',
+        'announcement.view',
         'announcement.create',
+        'event.view',
+        'meeting.view',
         'task.manage',
         'inventory.manage',
       ],
@@ -58,18 +72,18 @@ const ROLE_DEFINITIONS = [
     {
       name: `${prefix} Koordinatörü`,
       description: `${prefix} koordinatörü`,
-      permissionKeys: ['member.view', 'announcement.create', 'task.manage'],
+      permissionKeys: ['member.view', 'announcement.view', 'announcement.create', 'event.view', 'task.manage'],
     },
   ]),
   {
     name: 'Stajyer',
     description: 'Gözlem ve destek — salt okunur üye listesi',
-    permissionKeys: ['member.view'],
+    permissionKeys: ['member.view', 'event.view', 'meeting.view'],
   },
   {
     name: 'Üye',
     description: 'Standart topluluk üyesi',
-    permissionKeys: ['member.view'],
+    permissionKeys: ['member.view', 'event.view', 'meeting.view'],
   },
 ]
 
@@ -216,6 +230,7 @@ async function main() {
       avatarUrl: avatarUrl('topluluk-baskan'),
       employmentStatus: 'ACTIVE',
       isActive: true,
+      registrationStatus: 'APPROVED',
       email: 'baskan@topluluk.hacettepe.edu.tr',
     },
     create: {
@@ -230,6 +245,7 @@ async function main() {
       avatarUrl: avatarUrl('topluluk-baskan'),
       employmentStatus: 'ACTIVE',
       isActive: true,
+      registrationStatus: 'APPROVED',
     },
   })
 
@@ -263,6 +279,7 @@ async function main() {
         employmentStatus,
         isActive: active,
         password: hashedEmployee,
+        registrationStatus: 'APPROVED',
       },
       create: {
         email,
@@ -276,6 +293,7 @@ async function main() {
         avatarUrl: avatarUrl(username),
         employmentStatus,
         isActive: active,
+        registrationStatus: 'APPROVED',
       },
     })
 
@@ -286,7 +304,7 @@ async function main() {
     })
   }
 
-  await prisma.club.upsert({
+  const club = await prisma.club.upsert({
     where: { name: 'Hacettepe Öğrenci Topluluğu' },
     update: {},
     create: {
@@ -296,6 +314,68 @@ async function main() {
       isActive: true,
     },
   })
+
+  if ((await prisma.participationStatus.count({ where: { scope: 'EVENT' } })) === 0) {
+    await prisma.participationStatus.createMany({
+      data: [
+        { scope: 'EVENT', label: 'Katılıyorum', color: '#15803d', fontWeight: '600', sortOrder: 0 },
+        { scope: 'EVENT', label: 'Katılmıyorum', color: '#b91c1c', sortOrder: 1 },
+        { scope: 'EVENT', label: 'Belki', color: '#a16207', fontStyle: 'italic', sortOrder: 2 },
+      ],
+    })
+  }
+
+  if ((await prisma.participationStatus.count({ where: { scope: 'MEETING' } })) === 0) {
+    await prisma.participationStatus.createMany({
+      data: [
+        { scope: 'MEETING', label: 'Katılacağım', color: '#15803d', sortOrder: 0 },
+        { scope: 'MEETING', label: 'Katılamayacağım', color: '#b91c1c', sortOrder: 1 },
+        { scope: 'MEETING', label: 'Müsait değilim', color: '#64748b', sortOrder: 2 },
+      ],
+    })
+  }
+
+  if ((await prisma.eventCategory.count()) === 0) {
+    await prisma.eventCategory.createMany({
+      data: [
+        { name: 'Sosyal', description: 'Sosyal etkinlikler', color: '#7c3aed', sortOrder: 0 },
+        { name: 'Akademik', description: 'Akademik içerik', color: '#0369a1', sortOrder: 1 },
+        { name: 'Spor', color: '#059669', sortOrder: 2 },
+      ],
+    })
+  }
+
+  if ((await prisma.meetingCategory.count()) === 0) {
+    await prisma.meetingCategory.createMany({
+      data: [
+        { name: 'Yönetim kurulu', color: '#0f172a', sortOrder: 0 },
+        { name: 'Komite', color: '#334155', sortOrder: 1 },
+      ],
+    })
+  }
+
+  const hasSampleEvent = await prisma.event.findFirst({
+    where: { clubId: club.id, title: 'Örnek tanışma kahvaltısı', deletedAt: null },
+  })
+  if (!hasSampleEvent) {
+    const evCat = await prisma.eventCategory.findFirst({ where: { name: 'Sosyal', deletedAt: null } })
+    if (evCat) {
+      await prisma.event.create({
+        data: {
+          title: 'Örnek tanışma kahvaltısı',
+          description: 'Yeni üyelerle tanışma — örnek kayıt',
+          location: 'Kulüp ofisi',
+          startDate: new Date(Date.now() + 7 * 86400000),
+          endDate: null,
+          startUndetermined: false,
+          endUndetermined: true,
+          clubId: club.id,
+          categoryId: evCat.id,
+          isPublic: true,
+        },
+      })
+    }
+  }
 
   console.log('\nTamamlandı.')
   console.log('Başkan e-posta   : baskan@topluluk.hacettepe.edu.tr')

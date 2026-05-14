@@ -72,6 +72,7 @@ const register = async (body, req) => {
       faculty: faculty || null,
       department: department || null,
       year: year || null,
+      registrationStatus: 'PENDING',
     },
     select: {
       id: true,
@@ -115,6 +116,9 @@ const login = async ({ identifier, password, rememberMe }, req) => {
       avatarUrl: true,
       employmentStatus: true,
       isActive: true,
+      registrationStatus: true,
+      portalDeactivated: true,
+      deletedAt: true,
       roles: {
         select: {
           role: { select: { id: true, name: true } },
@@ -127,8 +131,20 @@ const login = async ({ identifier, password, rememberMe }, req) => {
     throw new AppError('Invalid credentials', 401, 'INVALID_CREDENTIALS')
   }
 
+  if (user.deletedAt) {
+    throw new AppError('Invalid credentials', 401, 'INVALID_CREDENTIALS')
+  }
+
   if (!user.isActive) {
     throw new AppError('Account is disabled', 403, 'ACCOUNT_DISABLED')
+  }
+
+  if (user.registrationStatus === 'PENDING') {
+    throw new AppError(
+      'Hesabınız yönetici onayı bekliyor. Onaylandığında giriş yapabileceksiniz.',
+      403,
+      'REGISTRATION_PENDING'
+    )
   }
 
   const ok = await bcrypt.compare(password, user.password)
@@ -177,6 +193,8 @@ const login = async ({ identifier, password, rememberMe }, req) => {
       year: user.year,
       avatarUrl: user.avatarUrl,
       employmentStatus: user.employmentStatus,
+      registrationStatus: user.registrationStatus,
+      portalDeactivated: user.portalDeactivated,
       roles,
     },
   }
@@ -274,11 +292,19 @@ const refresh = async (refreshToken, req) => {
 
   const user = await prisma.user.findUnique({
     where: { id: stored.userId },
-    select: { id: true, isActive: true },
+    select: { id: true, isActive: true, registrationStatus: true, deletedAt: true },
   })
 
   if (!user?.isActive) {
     throw new AppError('Account is disabled', 403, 'ACCOUNT_DISABLED')
+  }
+
+  if (user.deletedAt) {
+    throw new AppError('Invalid refresh token', 401, 'INVALID_REFRESH')
+  }
+
+  if (user.registrationStatus === 'PENDING') {
+    throw new AppError('Hesap onayı bekleniyor', 403, 'REGISTRATION_PENDING')
   }
 
   await prisma.refreshToken.update({
@@ -325,8 +351,15 @@ const me = async (userId) => {
       avatarUrl: true,
       employmentStatus: true,
       isActive: true,
+      registrationStatus: true,
+      portalDeactivated: true,
+      approvedAt: true,
+      approvedById: true,
       createdAt: true,
       uiPreferences: true,
+      approvedBy: {
+        select: { id: true, firstName: true, lastName: true, username: true },
+      },
       roles: {
         select: {
           role: {
@@ -375,6 +408,17 @@ const me = async (userId) => {
     avatarUrl: user.avatarUrl,
     employmentStatus: user.employmentStatus,
     isActive: user.isActive,
+    registrationStatus: user.registrationStatus,
+    portalDeactivated: user.portalDeactivated,
+    approvedAt: user.approvedAt,
+    approvedBy: user.approvedBy
+      ? {
+          id: user.approvedBy.id,
+          firstName: user.approvedBy.firstName,
+          lastName: user.approvedBy.lastName,
+          username: user.approvedBy.username,
+        }
+      : null,
     createdAt: user.createdAt,
     uiPreferences: user.uiPreferences ?? {},
     roles,

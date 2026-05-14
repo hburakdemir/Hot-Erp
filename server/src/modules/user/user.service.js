@@ -19,6 +19,13 @@ const USER_SELECT = {
   avatarUrl: true,
   employmentStatus: true,
   isActive: true,
+  registrationStatus: true,
+  portalDeactivated: true,
+  approvedAt: true,
+  approvedById: true,
+  approvedBy: {
+    select: { id: true, firstName: true, lastName: true, username: true },
+  },
   createdAt: true,
   updatedAt: true,
   roles: {
@@ -28,10 +35,21 @@ const USER_SELECT = {
   },
 }
 
-const formatUser = (user) => ({
-  ...user,
-  roles: user.roles.map((ur) => ur.role),
-})
+const formatUser = (user) => {
+  const { approvedBy, ...rest } = user
+  return {
+    ...rest,
+    roles: (user.roles ?? []).map((ur) => ur.role),
+    approvedBy: approvedBy
+      ? {
+          id: approvedBy.id,
+          firstName: approvedBy.firstName,
+          lastName: approvedBy.lastName,
+          username: approvedBy.username,
+        }
+      : null,
+  }
+}
 
 const getAllUsers = async (query) => {
   const {
@@ -41,6 +59,8 @@ const getAllUsers = async (query) => {
     roleId,
     employmentStatus,
     isActive,
+    registrationStatus,
+    portalDeactivated,
     sortBy,
     sortOrder,
   } = query
@@ -48,7 +68,7 @@ const getAllUsers = async (query) => {
   const skip = (page - 1) * limit
 
   const where = {
-    AND: [],
+    AND: [{ deletedAt: null }],
   }
 
   if (search?.trim()) {
@@ -74,6 +94,14 @@ const getAllUsers = async (query) => {
 
   if (isActive !== undefined) {
     where.AND.push({ isActive: isActive === 'true' })
+  }
+
+  if (registrationStatus) {
+    where.AND.push({ registrationStatus })
+  }
+
+  if (portalDeactivated !== undefined) {
+    where.AND.push({ portalDeactivated: portalDeactivated === 'true' })
   }
 
   if (roleId) {
@@ -109,8 +137,8 @@ const getAllUsers = async (query) => {
 }
 
 const getUserById = async (id) => {
-  const user = await prisma.user.findUnique({
-    where: { id },
+  const user = await prisma.user.findFirst({
+    where: { id, deletedAt: null },
     select: USER_SELECT,
   })
 
@@ -145,6 +173,9 @@ const createUser = async (data, req, actorId) => {
       department: data.department ?? null,
       employmentStatus: data.employmentStatus ?? 'ACTIVE',
       avatarUrl: data.avatarUrl ?? null,
+      registrationStatus: 'APPROVED',
+      approvedAt: new Date(),
+      approvedById: actorId,
     },
     select: USER_SELECT,
   })
@@ -163,7 +194,7 @@ const createUser = async (data, req, actorId) => {
 }
 
 const assignRoles = async (userId, roleIds, req, actorId) => {
-  const user = await prisma.user.findUnique({ where: { id: userId } })
+  const user = await prisma.user.findFirst({ where: { id: userId, deletedAt: null } })
   if (!user) {
     const err = new Error('User not found')
     err.statusCode = 404
@@ -205,7 +236,7 @@ const assignRoles = async (userId, roleIds, req, actorId) => {
 }
 
 const updateUser = async (id, data, req, actorId) => {
-  const user = await prisma.user.findUnique({ where: { id } })
+  const user = await prisma.user.findFirst({ where: { id, deletedAt: null } })
   if (!user) {
     const err = new Error('User not found')
     err.statusCode = 404
@@ -231,25 +262,74 @@ const updateUser = async (id, data, req, actorId) => {
 }
 
 const deleteUser = async (id, req, actorId) => {
-  const user = await prisma.user.findUnique({ where: { id } })
+  const user = await prisma.user.findFirst({ where: { id, deletedAt: null } })
   if (!user) {
     const err = new Error('User not found')
     err.statusCode = 404
     throw err
   }
 
-  await prisma.user.delete({ where: { id } })
+  await prisma.user.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  })
 
   await logAudit({
     actorId,
-    action: 'user.deleted',
+    action: 'user.soft_deleted',
     entityType: 'User',
     entityId: id,
     metadata: { email: user.email },
     req,
   })
 
-  logger.info({ userId: id }, 'user.deleted')
+  logger.info({ userId: id }, 'user.soft_deleted')
+}
+
+const bulkApproveRegistration = async (userIds, req, actorId) => {
+  const result = await prisma.user.updateMany({
+    where: { id: { in: userIds }, deletedAt: null },
+    data: {
+      registrationStatus: 'APPROVED',
+      approvedAt: new Date(),
+      approvedById: actorId,
+    },
+  })
+
+  await logAudit({
+    actorId,
+    action: 'user.bulk_approved',
+    entityType: 'User',
+    entityId: actorId,
+    metadata: { userIds, count: result.count },
+    req,
+  })
+
+  return { updated: result.count }
+}
+
+const bulkSetPortalDeactivated = async (userIds, portalDeactivated, req, actorId) => {
+  if (userIds.includes(actorId)) {
+    const err = new Error('Kendi hesabınızı bu işlemle değiştiremezsiniz')
+    err.statusCode = 400
+    throw err
+  }
+
+  const result = await prisma.user.updateMany({
+    where: { id: { in: userIds }, deletedAt: null },
+    data: { portalDeactivated },
+  })
+
+  await logAudit({
+    actorId,
+    action: 'user.bulk_portal_status',
+    entityType: 'User',
+    entityId: actorId,
+    metadata: { userIds, portalDeactivated, count: result.count },
+    req,
+  })
+
+  return { updated: result.count }
 }
 
 const getMyUiPreferences = async (userId) => {
@@ -290,6 +370,8 @@ module.exports = {
   assignRoles,
   updateUser,
   deleteUser,
+  bulkApproveRegistration,
+  bulkSetPortalDeactivated,
   getMyUiPreferences,
   patchMyUiPreferences,
 }

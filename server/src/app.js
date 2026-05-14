@@ -15,6 +15,11 @@ const roleRoutes       = require('./modules/role/role.routes')
 const permissionRoutes = require('./modules/permission/permission.routes')
 const memberRoutes     = require('./modules/member/member.routes')
 const auditRoutes      = require('./modules/audit/audit.routes')
+const dashboardRoutes  = require('./modules/dashboard/dashboard.routes')
+const announcementRoutes = require('./modules/announcement/announcement.routes')
+const eventRoutes      = require('./modules/event/event.routes')
+const meetingRoutes    = require('./modules/meeting/meeting.routes')
+const clubRoutes       = require('./modules/club/club.routes')
 
 const app = express()
 
@@ -61,6 +66,11 @@ app.use('/roles',       roleRoutes)
 app.use('/permissions', permissionRoutes)
 app.use('/members',     memberRoutes)
 app.use('/audit-logs',  auditRoutes)
+app.use('/dashboard',  dashboardRoutes)
+app.use('/announcements', announcementRoutes)
+app.use('/events',      eventRoutes)
+app.use('/meetings',    meetingRoutes)
+app.use('/clubs',       clubRoutes)
 
 // Tanimlanmamis route'lar icin 404
 app.use((req, res) => {
